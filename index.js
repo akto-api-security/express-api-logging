@@ -1,7 +1,7 @@
 const fs = require('fs')
 const { Kafka } = require('kafkajs')
-const amqplib = require('amqplib');
 
+let messages = []
 
 function init(brokers, topic) {
     return function(req, res, next) {
@@ -21,7 +21,11 @@ function init(brokers, topic) {
             }
             try {
                 const logJson = generateLog(req,res, chunks);
-                await sendToKafka(brokers,topic, logJson)
+                messages.push({value: logJson})
+                l = messages.length
+                if (l >= 20) {
+                    await sendToKafka(req.app.locals.producer, topic, messages.splice(0,20))
+                }
                 
             } catch (error) {
                 console.log(error);
@@ -40,31 +44,25 @@ function generateLog(req, res, chunks) {
         requestHeaders: req.headers,
         responseHeaders:res.getHeaders(),
         method: req.method,
-        requestPayload: req.body,
+        requestPayload: JSON.stringify(req.body),
         responsePayload: body,
         ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
         time: new Date().valueOf(),
         statusCode: res.statusCode,
+        type: "HTTP/" + req.httpVersion,
+        url: req.protocol + '://' + req.get('host') + req.originalUrl,
+        status: res.statusMessage,
     };
 
     return JSON.stringify(value);
 
 }
 
-async function sendToKafka(brokers, topic,message) {
-    const kafka = new Kafka({
-        clientId: 'my-app',
-        brokers: brokers,
-    })
-    const producer = kafka.producer()
-
-    await producer.connect()
+async function sendToKafka(producer, topic, messages) {
     await producer.send({
         topic: topic,
-        messages: [{ value: message},],
+        messages: messages,
     })
-
-    await producer.disconnect()
 }
 
 exports.init = init
