@@ -3,7 +3,7 @@ const { Kafka } = require('kafkajs')
 
 let messages = []
 
-function init(brokers, topic) {
+function init(brokers, topic, akto_account_id) {
     return function(req, res, next) {
         const oldWrite = res.write;
         const oldEnd = res.end;
@@ -20,7 +20,7 @@ function init(brokers, topic) {
                 chunks.push(Buffer.from(restArgs[0]));
             }
             try {
-                const logJson = generateLog(req,res, chunks);
+                const logJson = generateLog(req,res, chunks, akto_account_id);
                 messages.push({value: logJson})
                 l = messages.length
                 if (l >= 20) {
@@ -37,7 +37,7 @@ function init(brokers, topic) {
     }
 }
 
-function generateLog(req, res, chunks) {
+function generateLog(req, res, chunks, akto_account_id) {
     const body = Buffer.concat(chunks).toString('utf8');
     var value = {
         path: req.originalUrl,
@@ -52,6 +52,7 @@ function generateLog(req, res, chunks) {
         type: "HTTP/" + req.httpVersion,
         url: req.protocol + '://' + req.get('host') + req.originalUrl,
         status: res.statusMessage,
+	akto_account_id: akto_account_id
     };
 
     return JSON.stringify(value);
